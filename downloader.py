@@ -107,9 +107,12 @@ async def get_pics_url(pathword,chapter_uuid:str) -> list[str]:
     async with aiohttp.ClientSession(headers=headers) as session:
         json_src = await fetch(session,API_COMIC.format(pathword=pathword,uuid=chapter_uuid))
     json_obj = json.loads(json_src)
-    pic_urls = json_obj['results']['chapter']['contents']  # uuid url
-    pic_urls = list(map(lambda x:x['url'],pic_urls))
-    return pic_urls
+    src_pic_urls = json_obj['results']['chapter']['contents']  # uuid url
+    url_index = json_obj['results']['chapter']['words']
+    urls = []
+    for i in range(len(src_pic_urls)):
+        urls.append((url_index[i],src_pic_urls[i]['url']))
+    return urls
 
 async def download_chapter(pathword,chapter,chapter_uuid,manga_name=''):
     """下载一个章节
@@ -129,7 +132,7 @@ async def download_chapter(pathword,chapter,chapter_uuid,manga_name=''):
         chapter_uuid = await get_chapter_uuid(pathword,chapter)
     pic_urls = await get_pics_url(pathword,chapter_uuid)
     logger.info(f'Downloading {chapter}, {len(pic_urls)} pictures.')
-    tasks = [asyncio.create_task(download(url,os.path.join(folder,f'{i+1}.jpg'))) for i,url in enumerate(pic_urls)]
+    tasks = [asyncio.create_task(download(url,os.path.join(folder,f'{i+1}.jpg'))) for i,url in pic_urls]
     results = await asyncio.gather(*tasks)
     logger.info(f'{chapter} downloaded.')
 
@@ -165,8 +168,8 @@ async def download_chapters(pathword,chapter_range:str,manga_name=''):
 
 async def get_all_updated_manga():
     """获取追漫列表最新更新
-        Returns:
-            [(pathword:str,chapter_range:str)]
+    Returns:
+        [(pathword:str,chapter_range:str)]
     """
     async def get_updated(pathword,curr):
         chapters = await get_chapters_uuid(pathword)
@@ -226,23 +229,23 @@ def main():
     """)
     loop = asyncio.get_event_loop()
     while True:
-        mode = input('You want?[1/2/3]: ')
-        if mode == '1':
-            loop.run_until_complete(updated_watching())
-        elif mode == '2':
-            pathword = input('Pathword: ')
-            chapter = input('Chapter: ')
-            try:
+        try:
+            mode = input('You want?[1/2/3]: ')
+            if mode == '1':
+                loop.run_until_complete(updated_watching())
+            elif mode == '2':
+                pathword = input('Pathword: ')
+                chapter = input('Chapter: ')
                 loop.run_until_complete(download_chapters(pathword,chapter))
-            except Exception as e:
-                logger.error(e)
-            logger.info('Download finished.')
-        elif mode == '3':
-            loop.run_until_complete(re_download_failed())
-        # 下载失败列表
-        if len(g_download_failed) > 0:
-            logger.warning(f'Failed list:{g_download_failed}')
-        print('----------------------------')
+                logger.info('Download finished.')
+            elif mode == '3':
+                loop.run_until_complete(re_download_failed())
+            # 下载失败列表
+            if len(g_download_failed) > 0:
+                logger.warning(f'Failed list:{g_download_failed}')
+            print('----------------------------')
+        except Exception as e:
+            logging.error(e)
 
 if __name__ == '__main__':
     main()
