@@ -2,10 +2,14 @@ import asyncio,aiohttp,aiofiles
 from asyncio.tasks import ensure_future
 from json import encoder
 from json.decoder import JSONDecodeError
-import json,os,logging,re
-logging.basicConfig(level = logging.INFO,format = '[%(levelname)s] %(asctime)s - %(message)s')
+import json,os,logging,re,traceback,sys
+logging.basicConfig(level = logging.INFO,format = '[%(levelname)s] LINE:%(lineno)d %(asctime)s - %(message)s')
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+# 默认的ProactorEventLoop使用http代理访问https站点有bug，所以切换至SelectorEventLoop (aiohttp3.8+版本已修复)
+#if sys.platform == 'win32':
+#    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 headers = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
@@ -16,7 +20,7 @@ API_COMIC = 'https://api.copymanga.com/api/v3/comic/{pathword}/chapter2/{uuid}?p
 COMIC_INDEX = 'https://www.copymanga.com/comic/{pathword}'
 
 retry = 3 # 下载失败重试次数
-
+proxydict = "http://127.0.0.1:10809"
 g_chapters = {} # 章节缓存
 g_download_failed = []
 
@@ -45,7 +49,7 @@ async def download(url,path):
 async def fetch(session, url):
     for i in range(retry):
         try:
-            async with session.get(url) as resp:
+            async with session.get(url,proxy=proxydict) as resp:
                 return await resp.text()
         except:
             continue
@@ -185,7 +189,7 @@ async def get_all_updated_manga():
         with open('./watching.json','r',encoding='utf-8') as f:
             data = json.loads(f.read())
     except JSONDecodeError as e:
-        logger.error('Read data.json error.')
+        logger.error('Read watching.json error.')
     res = []
     for name in data:
         updated = await get_updated(name,data[name])
@@ -228,6 +232,7 @@ def main():
     ----------------------------
     """)
     loop = asyncio.get_event_loop()
+    #loop.starttls()
     while True:
         try:
             mode = input('You want?[1/2/3]: ')
@@ -246,6 +251,7 @@ def main():
             print('----------------------------')
         except Exception as e:
             logging.error(e)
+            logging.error("\n"+traceback.format_exc())
 
 if __name__ == '__main__':
     main()
